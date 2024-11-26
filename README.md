@@ -14,6 +14,6 @@
 
    ```bash
    g++ analisador.cpp -o analisador
-
-```bash
-   
+-------
+   ```bash
+   ./analisador
