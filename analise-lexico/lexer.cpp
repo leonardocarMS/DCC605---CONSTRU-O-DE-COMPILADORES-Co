@@ -1,21 +1,19 @@
 #include <iostream>
 #include <unordered_map>
 #include <string>
-#include <cctype> // Para funções como isdigit() e isspace()
+#include <cctype>
+#include <memory> // Para smart pointers
 
 using namespace std;
 
-// Definição dos tokens básicos
 enum class Tag { TRUE, FALSE, ID, NUM, LT, LE, EQ, NE, GE, GT, OTHER };
 
-// Classe base para tokens
 class Token {
 public:
     virtual ~Token() = default;
-    virtual void print() const { cout << "Token: " << endl; }
+    virtual void print() const { cout << "Token" << endl; }
 };
 
-// Classe para números
 class Num : public Token {
 public:
     int value;
@@ -23,39 +21,30 @@ public:
     void print() const override { cout << "Num: " << value << endl; }
 };
 
-// Classe para palavras reservadas e identificadores
 class Word : public Token {
 public:
     string lexeme;
     Tag tag;
-
-    Word(Tag t, const string &lex) : lexeme(lex), tag(t) {}
+    Word(Tag t, const string& lex) : tag(t), lexeme(lex) {}
     void print() const override { cout << "Word: " << lexeme << endl; }
 };
 
-// Classe do analisador léxico (Lexer)
 class Lexer {
 private:
     int line = 1;
     char peek = ' ';
-    unordered_map<string, Word*> words;
+    unordered_map<string, shared_ptr<Word>> words;
 
-    void reserve(Word* w) { words[w->lexeme] = w; }
+    void reserve(shared_ptr<Word> w) { words[w->lexeme] = w; }
     void readNextChar() { peek = cin.get(); }
 
 public:
     Lexer() {
-        reserve(new Word(Tag::TRUE, "true"));
-        reserve(new Word(Tag::FALSE, "false"));
+        reserve(make_shared<Word>(Tag::TRUE, "true"));
+        reserve(make_shared<Word>(Tag::FALSE, "false"));
     }
 
-    ~Lexer() {
-        for (auto &pair : words) {
-            delete pair.second;
-        }
-    }
-
-    Token* scan() {
+    shared_ptr<Token> scan() {
         while (isspace(peek)) {
             if (peek == '\n') line++;
             readNextChar();
@@ -65,54 +54,54 @@ public:
         if (peek == '/') {
             readNextChar();
             if (peek == '/') {
-                while (peek != '\n' && peek != EOF) {
-                    readNextChar();
-                }
+                while (peek != '\n' && !cin.eof()) readNextChar();
                 return scan();
             } else if (peek == '*') {
                 while (true) {
                     readNextChar();
                     if (peek == '*' && cin.peek() == '/') {
-                        readNextChar();
-                        readNextChar();
+                        readNextChar(); readNextChar();
                         break;
                     }
-                    if (cin.eof()) return nullptr; // Evita loop infinito
+                    if (cin.eof()) {
+                        cerr << "Erro: Comentário não terminado!" << endl;
+                        return nullptr;
+                    }
                 }
                 return scan();
             } else {
-                return new Word(Tag::OTHER, "/");
+                return make_shared<Word>(Tag::OTHER, "/");
             }
         }
 
-        // Reconhecimento de operadores relacionais
+        // Operadores relacionais
         if (peek == '<' || peek == '>' || peek == '=' || peek == '!') {
             char current = peek;
             readNextChar();
             if (peek == '=') {
                 switch (current) {
-                    case '<': return new Word(Tag::LE, "<=");
-                    case '>': return new Word(Tag::GE, ">=");
-                    case '=': return new Word(Tag::EQ, "==");
-                    case '!': return new Word(Tag::NE, "!=");
+                    case '<': return make_shared<Word>(Tag::LE, "<=");
+                    case '>': return make_shared<Word>(Tag::GE, ">=");
+                    case '=': return make_shared<Word>(Tag::EQ, "==");
+                    case '!': return make_shared<Word>(Tag::NE, "!=");
                 }
             } else {
                 switch (current) {
-                    case '<': return new Word(Tag::LT, "<");
-                    case '>': return new Word(Tag::GT, ">");
-                    default: return new Word(Tag::OTHER, string(1, current));
+                    case '<': return make_shared<Word>(Tag::LT, "<");
+                    case '>': return make_shared<Word>(Tag::GT, ">");
+                    default: return make_shared<Word>(Tag::OTHER, string(1, current));
                 }
             }
         }
 
-        // Reconhecimento de números
+        // Números
         if (isdigit(peek)) {
             int v = 0;
             do {
                 v = 10 * v + (peek - '0');
                 readNextChar();
             } while (isdigit(peek));
-            return new Num(v);
+            return make_shared<Num>(v);
         }
 
         // Identificadores e palavras reservadas
@@ -126,33 +115,30 @@ public:
             if (words.find(lexeme) != words.end()) {
                 return words[lexeme];
             }
-            Word* w = new Word(Tag::ID, lexeme);
-            words[lexeme] = w;
-            return w;
+            words[lexeme] = make_shared<Word>(Tag::ID, lexeme);
+            return words[lexeme];
         }
 
         // Outros símbolos
         if (!cin.eof()) {
-            Token* t = new Word(Tag::OTHER, string(1, peek));
+            auto t = make_shared<Word>(Tag::OTHER, string(1, peek));
             readNextChar();
             return t;
         }
 
-        return nullptr; // Fim da entrada
+        return nullptr;
     }
 };
 
-// Função principal (para teste)
 int main() {
     Lexer lexer;
-
     cout << "Digite a entrada (Ctrl+D para encerrar):" << endl;
-    Token* token;
-    while (cin.peek() != EOF) {
+
+    shared_ptr<Token> token;
+    while (!cin.eof()) {
         token = lexer.scan();
-        if (token != nullptr) {
+        if (token) {
             token->print();
-            delete token;
         }
     }
 
